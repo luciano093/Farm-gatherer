@@ -1,16 +1,31 @@
 use std::{time::Duration};
 
+use clap::{command, Parser};
 use fantoccini::{elements::Element, ClientBuilder, Locator};
 use farm_gatherer::{csv::write_to_csv, data::FarmData};
 use tokio::time::{sleep, timeout};
 
+#[derive(Parser)]
+#[command(version, about, long_about = None)]
+struct Cli {
+    /// search to operate on
+    #[arg(long)]
+    search: String,
+    #[arg(long)]
+    port: Option<u32>,
+    #[arg(long)]
+    output: Option<String>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), fantoccini::error::CmdError> {
+    let parser = Cli::parse();
+
     let c = ClientBuilder::native().connect("http://localhost:51529").await.expect("failed to connect to WebDriver");
 
     let mut farms = Vec::new();
 
-    c.goto("https://www.google.com/search?tbm=lcl&q=texas+farms&rflfq=1&num=10").await?;
+    c.goto(&format!("https://www.google.com/search?tbm=lcl&q={}&rflfq=1&num=10", parser.search.replace(" ", "+"))).await?;
 
     let mut clickables_count = c.find_all(Locator::Css(".rllt__details")).await?.len();
 
@@ -96,7 +111,12 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
 
     c.close().await?;
 
-    write_to_csv(&farms, "farms.csv").unwrap();
+    if let Some(name) = parser.output {
+        write_to_csv(&farms, &name).unwrap();
+    } else {
+        write_to_csv(&farms, "farms.csv").unwrap();
+    }
+
 
     Ok(())
 }
