@@ -6,15 +6,21 @@ use tokio::time::{sleep, timeout};
 
 #[tokio::main]
 async fn main() -> Result<(), fantoccini::error::CmdError> {
-    let c = ClientBuilder::native().connect("http://localhost:49907").await.expect("failed to connect to WebDriver");
+    let c = ClientBuilder::native().connect("http://localhost:51529").await.expect("failed to connect to WebDriver");
 
     let mut farms = Vec::new();
 
     c.goto("https://www.google.com/search?tbm=lcl&q=texas+farms&rflfq=1&num=10").await?;
 
-    let clickables_count = c.find_all(Locator::Css(".rllt__details")).await?.len();
+    let mut clickables_count = c.find_all(Locator::Css(".rllt__details")).await?.len();
 
-    for i in 0..clickables_count {
+    let mut page = 1;
+    let max_results = 50;
+    let mut current_results = 0;
+
+    let mut i = 0;
+
+    while i < clickables_count && current_results < max_results {
         let clickables = c.find_all(Locator::Css(".rllt__details")).await?;
         
         if i >= clickables.len() {
@@ -46,7 +52,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
                 Err(err) => eprintln!("{}", err),
             }
         }
-        sleep(Duration::from_millis(400)).await;
+        // sleep(Duration::from_millis(400)).await;
         c.find(Locator::Css("div[aria-label='Close']")).await?.find(Locator::Css("span")).await?.click().await?;
 
         let closed = timeout(Duration::from_secs(10), async {
@@ -67,7 +73,25 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
             Ok(_) => println!("Element disappeared"),
             Err(_) => println!("Timeout: element still exists"),
         }
-        sleep(Duration::from_millis(400)).await;
+        // sleep(Duration::from_millis(400)).await;
+
+        current_results += 1;
+
+        if i == clickables_count - 1 {
+            page += 1;
+
+            let pagination = c.find(Locator::Css("div[aria-label='Local Results Pagination']")).await.unwrap();
+
+            pagination.find(Locator::Css(&format!("a[aria-label='Page {}']", page))).await.unwrap().click().await.unwrap();
+
+            sleep(Duration::from_secs(4)).await;
+
+            i = 0;
+            clickables_count = c.find_all(Locator::Css(".rllt__details")).await?.len();
+            continue;
+        }
+
+        i += 1;
     }
 
     c.close().await?;
