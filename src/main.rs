@@ -13,7 +13,7 @@ struct Cli {
     #[arg(long)]
     search: String,
     #[arg(long)]
-    port: Option<u32>,
+    port: u16,
     #[arg(long)]
     headless: Option<bool>,
     #[arg(long)]
@@ -35,7 +35,7 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
     let mut caps = serde_json::map::Map::new();
     caps.insert("goog:chromeOptions".to_string(), chrome_opts);
 
-    let c = ClientBuilder::native().capabilities(caps).connect("http://localhost:51529").await.expect("failed to connect to WebDriver");
+    let c = ClientBuilder::native().capabilities(caps).connect(&format!("http://localhost:{}", parser.port)).await.expect("failed to connect to WebDriver");
 
     let mut farms = Vec::new();
 
