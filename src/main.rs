@@ -1,6 +1,6 @@
 use std::{time::Duration};
 
-use clap::{command, Parser};
+use clap::{command, ArgAction, Parser};
 use fantoccini::{elements::Element, ClientBuilder, Locator};
 use farm_gatherer::{csv::write_to_csv, data::FarmData};
 use serde_json::json;
@@ -14,7 +14,7 @@ struct Cli {
     search: String,
     #[arg(long)]
     port: u16,
-    #[arg(long)]
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
     headless: Option<bool>,
     #[arg(long)]
     output: Option<String>,
