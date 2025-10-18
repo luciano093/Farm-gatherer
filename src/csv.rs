@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use csv::{Writer, WriterBuilder};
+use csv::WriterBuilder;
 use serde::Serialize;
 
 use crate::data::FarmData;

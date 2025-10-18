@@ -3,6 +3,7 @@ use std::{time::Duration};
 use clap::{command, Parser};
 use fantoccini::{elements::Element, ClientBuilder, Locator};
 use farm_gatherer::{csv::write_to_csv, data::FarmData};
+use serde_json::json;
 use tokio::time::{sleep, timeout};
 
 #[derive(Parser)]
@@ -14,6 +15,8 @@ struct Cli {
     #[arg(long)]
     port: Option<u32>,
     #[arg(long)]
+    headless: Option<bool>,
+    #[arg(long)]
     output: Option<String>,
 }
 
@@ -21,11 +24,25 @@ struct Cli {
 async fn main() -> Result<(), fantoccini::error::CmdError> {
     let parser = Cli::parse();
 
-    let c = ClientBuilder::native().connect("http://localhost:51529").await.expect("failed to connect to WebDriver");
+    let chrome_opts = if let Some(headless) = parser.headless && headless { 
+        json!({
+        "args": ["--headless=new", "--disable-gpu"]
+        })
+    } else {
+        json!({})
+    };
+
+    let mut caps = serde_json::map::Map::new();
+    caps.insert("goog:chromeOptions".to_string(), chrome_opts);
+
+    let c = ClientBuilder::native().capabilities(caps).connect("http://localhost:51529").await.expect("failed to connect to WebDriver");
 
     let mut farms = Vec::new();
 
     c.goto(&format!("https://www.google.com/search?tbm=lcl&q={}&rflfq=1&num=10", parser.search.replace(" ", "+"))).await?;
+
+    // Make sure the page has loaded
+    sleep(Duration::from_millis(500)).await;
 
     let mut clickables_count = c.find_all(Locator::Css(".rllt__details")).await?.len();
 
