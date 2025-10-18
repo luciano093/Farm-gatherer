@@ -79,28 +79,25 @@ async fn main() -> anyhow::Result<()> {
             Err(_) => println!("Timeout: element still exists"),
         }
 
-        if let Ok(detail) = c.find(Locator::Css(".xpdopen")).await {
-            match handle_detals(&detail).await {
-                Ok(farm_data) => farms.push(farm_data),
-                Err(err) => eprintln!("{}", err),
-            }
-        }
-        // sleep(Duration::from_millis(400)).await;
-        c.find(Locator::Css("div[aria-label='Close']")).await?.click().await?;
+        let details_window = c.find(Locator::Css(".xpdopen")).await?;
+
+        let farm_data = handle_detals(&details_window).await?;
+        farms.push(farm_data);
 
         let closed = timeout(Duration::from_secs(10), async {
             loop {
-                match c.find(Locator::Css(".xpdopen")).await {
-                    Err(_) => break, // Element removed from DOM
-                    Ok(detail) => {
-                        match detail.is_displayed().await {
-                            Ok(false) | Err(_) => break, // Hidden or error
-                            Ok(true) => sleep(Duration::from_millis(100)).await,
-                        }
-                    }
+                match details_window.is_displayed().await {
+                    Ok(false) | Err(_) => break, // Hidden or error
+                    Ok(true) => {
+                        c.find(Locator::Css("div[aria-label='Close']")).await?.click().await?;
+                        sleep(Duration::from_millis(100)).await;
+                    },
                 }
             }
-        }).await;
+
+            Ok::<(), anyhow::Error>(())
+        })
+        .await;
 
         match closed {
             Ok(_) => println!("Element disappeared"),
