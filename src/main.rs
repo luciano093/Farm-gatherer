@@ -1,6 +1,6 @@
 use std::{time::Duration};
 
-use clap::{command, ArgAction, Parser};
+use clap::{command, Parser};
 use fantoccini::{elements::Element, ClientBuilder, Locator};
 use farm_gatherer::{csv::write_to_csv, data::FarmData};
 use serde_json::json;
@@ -21,7 +21,7 @@ struct Cli {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), fantoccini::error::CmdError> {
+async fn main() -> anyhow::Result<()> {
     let parser = Cli::parse();
 
     let chrome_opts = if let Some(headless) = parser.headless && headless { 
@@ -112,9 +112,9 @@ async fn main() -> Result<(), fantoccini::error::CmdError> {
         if i == clickables_count - 1 {
             page += 1;
 
-            let pagination = c.find(Locator::Css("div[aria-label='Local Results Pagination']")).await.unwrap();
+            let pagination = c.find(Locator::Css("div[aria-label='Local Results Pagination']")).await?;
 
-            pagination.find(Locator::Css(&format!("a[aria-label='Page {}']", page))).await.unwrap().click().await.unwrap();
+            pagination.find(Locator::Css(&format!("a[aria-label='Page {}']", page))).await?.click().await?;
 
             sleep(Duration::from_secs(4)).await;
 
