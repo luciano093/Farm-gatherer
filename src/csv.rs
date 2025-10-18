@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use csv::WriterBuilder;
 use serde::Serialize;
 
@@ -49,7 +47,7 @@ impl From<&FarmData> for FarmCSVRow {
     }
 }
 
-pub fn write_to_csv(farms: &Vec<FarmData>, filename: &str) -> Result<(), Box<dyn Error>> {
+pub fn write_to_csv(farms: &Vec<FarmData>, filename: &str) -> anyhow::Result<()> {
     let mut wtr = WriterBuilder::new()
         .from_path(filename)?;
     
@@ -59,5 +57,6 @@ pub fn write_to_csv(farms: &Vec<FarmData>, filename: &str) -> Result<(), Box<dyn
     }
     
     wtr.flush()?;
+
     Ok(())
 }

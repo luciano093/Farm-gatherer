@@ -1,5 +1,6 @@
 use std::{time::Duration};
 
+use anyhow::Context;
 use clap::{command, Parser};
 use fantoccini::{elements::Element, ClientBuilder, Locator};
 use farm_gatherer::{csv::write_to_csv, data::FarmData};
@@ -35,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let mut caps = serde_json::map::Map::new();
     caps.insert("goog:chromeOptions".to_string(), chrome_opts);
 
-    let c = ClientBuilder::native().capabilities(caps).connect(&format!("http://localhost:{}", parser.port)).await.expect("failed to connect to WebDriver");
+    let c = ClientBuilder::native().capabilities(caps).connect(&format!("http://localhost:{}", parser.port)).await.context("Failed to connect to WebDriver")?;
 
     let mut farms = Vec::new();
 
@@ -85,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         // sleep(Duration::from_millis(400)).await;
-        c.find(Locator::Css("div[aria-label='Close']")).await?.find(Locator::Css("span")).await?.click().await?;
+        c.find(Locator::Css("div[aria-label='Close']")).await?.click().await?;
 
         let closed = timeout(Duration::from_secs(10), async {
             loop {
@@ -114,7 +115,13 @@ async fn main() -> anyhow::Result<()> {
 
             let pagination = c.find(Locator::Css("div[aria-label='Local Results Pagination']")).await?;
 
-            pagination.find(Locator::Css(&format!("a[aria-label='Page {}']", page))).await?.click().await?;
+            match pagination.find(Locator::Css(&format!("a[aria-label='Page {}']", page))).await {
+                Ok(page_element) => page_element.click().await?,
+                Err(_) => {
+                    println!("Was unable to find more pages, last page found was: {}", page - 1);
+                    break;
+                }
+            };
 
             sleep(Duration::from_secs(4)).await;
 
@@ -126,14 +133,14 @@ async fn main() -> anyhow::Result<()> {
         i += 1;
     }
 
+    println!("Gathered {} results.", current_results);
+
     c.close().await?;
 
-    if let Some(name) = parser.output {
-        write_to_csv(&farms, &name).unwrap();
-    } else {
-        write_to_csv(&farms, "farms.csv").unwrap();
-    }
+    let csv_file = parser.output.as_deref().unwrap_or("data.csv");
 
+    println!("Saving results to {}.", csv_file);
+    write_to_csv(&farms, csv_file)?;
 
     Ok(())
 }
