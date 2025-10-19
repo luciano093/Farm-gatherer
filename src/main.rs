@@ -2,7 +2,7 @@ use std::{time::Duration};
 
 use anyhow::Context;
 use clap::{command, Parser};
-use fantoccini::{elements::Element, ClientBuilder, Locator};
+use fantoccini::{elements::Element, Client, ClientBuilder, Locator};
 use farm_gatherer::{csv::write_to_csv, data::FarmData};
 use serde_json::json;
 use tokio::time::{sleep, timeout};
@@ -48,19 +48,34 @@ async fn main() -> anyhow::Result<()> {
     let mut page = 1;
     let max_results = 50;
     let mut current_results = 0;
-    
-    let mut clickables_count;
+
     let mut i = 0;
+    let mut clickables = c.find_all(Locator::Css(".rllt__details")).await?;
 
     while current_results < max_results {
-        let clickables = c.find_all(Locator::Css(".rllt__details")).await?;
-        clickables_count = clickables.len();
-        
         if i >= clickables.len() {
-            break;
+            page += 1;
+
+            match find_next_page_element(&c, &mut page).await {
+                Ok(page_element) => page_element.click().await?,
+                Err(_) => {
+                    println!("Was unable to find more pages, last page found was: {}", page - 1);
+                    break;
+                }
+            };
+
+            i = 0;
+            continue;
         }
         
-        clickables[i].click().await?;
+        if let Err(err) = clickables[i].click().await {
+            if err.is_stale_element_reference() {
+                clickables = c.find_all(Locator::Css(".rllt__details")).await?;
+                continue;
+            } else {
+                return Err(err).context("Failed to click next result.");
+            }
+        }
 
         let result = timeout(Duration::from_secs(10), async {
             loop {
@@ -103,29 +118,8 @@ async fn main() -> anyhow::Result<()> {
             Ok(_) => println!("Element disappeared"),
             Err(_) => println!("Timeout: element still exists"),
         }
-        // sleep(Duration::from_millis(400)).await;
 
         current_results += 1;
-
-        if i == clickables_count - 1 {
-            page += 1;
-
-            let pagination = c.find(Locator::Css("div[aria-label='Local Results Pagination']")).await?;
-
-            match pagination.find(Locator::Css(&format!("a[aria-label='Page {}']", page))).await {
-                Ok(page_element) => page_element.click().await?,
-                Err(_) => {
-                    println!("Was unable to find more pages, last page found was: {}", page - 1);
-                    break;
-                }
-            };
-
-            sleep(Duration::from_secs(4)).await;
-
-            i = 0;
-            clickables_count = c.find_all(Locator::Css(".rllt__details")).await?.len();
-            continue;
-        }
 
         i += 1;
     }
@@ -167,4 +161,12 @@ async fn handle_detals(detail: &Element) -> Result<FarmData, fantoccini::error::
     println!("{:#?}", farm_data);
 
     Ok(farm_data)
+}
+
+pub async fn find_next_page_element(c: &Client, page: &mut u32) -> anyhow::Result<Element> {
+    let pagination = c.find(Locator::Css("[aria-label='Local Results Pagination']")).await?;
+
+    let page_element = pagination.find(Locator::Css(&format!("[aria-label='Page {}']", page))).await?;
+
+    Ok(page_element)
 }
