@@ -42,19 +42,19 @@ async fn main() -> anyhow::Result<()> {
 
     c.goto(&format!("https://www.google.com/search?tbm=lcl&q={}&rflfq=1&num=10", parser.search.replace(" ", "+"))).await?;
 
-    // Make sure the page has loaded
-    sleep(Duration::from_millis(500)).await;
-
-    let mut clickables_count = c.find_all(Locator::Css(".rllt__details")).await?.len();
+    // Wait until page loads and has the elements we need
+    c.wait().for_element(Locator::Css(".rllt__details")).await?;
 
     let mut page = 1;
     let max_results = 50;
     let mut current_results = 0;
-
+    
+    let mut clickables_count;
     let mut i = 0;
 
-    while i < clickables_count && current_results < max_results {
+    while current_results < max_results {
         let clickables = c.find_all(Locator::Css(".rllt__details")).await?;
+        clickables_count = clickables.len();
         
         if i >= clickables.len() {
             break;
