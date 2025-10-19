@@ -1,6 +1,6 @@
 use std::{time::Duration};
 
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use clap::{command, Parser};
 use fantoccini::{elements::Element, Client, ClientBuilder, Locator};
 use farm_gatherer::{csv::write_to_csv, data::FarmData};
@@ -42,22 +42,36 @@ async fn main() -> anyhow::Result<()> {
 
     c.goto(&format!("https://www.google.com/search?tbm=lcl&q={}&rflfq=1&num=10", parser.search.replace(" ", "+"))).await?;
 
-    // Wait until page loads and has the elements we need
-    c.wait().for_element(Locator::Css(".rllt__details")).await?;
+    // Wait until page loads and has the element that contains the results
+    c.wait()
+        .at_most(Duration::from_secs(10))
+        .for_element(Locator::Id("search"))
+        .await
+        .map_err(|_| anyhow!("Results container not found after 10 seconds. The page may not have loaded correctly."))?;
 
     let mut page = 1;
     let max_results = 50;
     let mut current_results = 0;
 
     let mut i = 0;
-    let mut clickables = c.find_all(Locator::Css(".rllt__details")).await?;
+    let mut clickables = c
+        .find_all(Locator::Css(".rllt__details"))
+        .await
+        .context("Results elements were not found. The page may not have loaded correctly.")?;
 
-    while current_results < max_results {
+    if clickables.is_empty() {
+        println!("No results found for your search query. Exiting.");
+        return Ok(());
+    }
+
+    while current_results < max_results && !clickables.is_empty() {
         if i >= clickables.len() {
             page += 1;
 
             match find_next_page_element(&c, &mut page).await {
-                Ok(page_element) => page_element.click().await?,
+                Ok(page_element) => {
+                    page_element.click().await?;
+                },
                 Err(_) => {
                     println!("Was unable to find more pages, last page found was: {}", page - 1);
                     break;
